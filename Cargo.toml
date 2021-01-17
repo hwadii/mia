@@ -1,0 +1,9 @@
+[package]
+name = "mia"
+version = "0.1.0"
+authors = ["Wadii Hajji <wadii@cardiologs.com>"]
+edition = "2018"
+
+[dependencies]
+skim = "*"
+json = "*"
