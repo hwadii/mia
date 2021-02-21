@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json;
+use skim::prelude::*;
 use std::error::Error;
 use std::fs;
 use std::process::{Child, Command};
-use skim::prelude::*;
-use std::io::Cursor;
 
 type Scripts = serde_json::Map<String, serde_json::Value>;
 
@@ -14,6 +13,21 @@ pub struct Package {
     pub version: String,
     pub scripts: Scripts,
     pub private: bool,
+}
+
+struct Script {
+    name: String,
+    description: String,
+}
+
+impl SkimItem for Script {
+    fn text(&self) -> Cow<str> {
+        Cow::Borrowed(&self.description)
+    }
+
+    fn output(&self) -> Cow<str> {
+        Cow::Borrowed(&self.name)
+    }
 }
 
 pub struct Instance {
@@ -36,20 +50,6 @@ impl Instance {
         })
     }
 
-    pub fn select_script(&self) -> String {
-        let options = SkimOptionsBuilder::default()
-            .height(Some("50%"))
-            .build()
-            .unwrap();
-        let input = self.package.scripts.keys().map(|s| &**s).collect::<Vec<&str>>().join("\n");
-        let item_reader = SkimItemReader::default();
-        let selected_items = Skim::run_with(&options, Some(item_reader.of_bufread(Cursor::new(input))))
-            .map(|out| out.selected_items)
-            .unwrap_or_else(|| Vec::new());
-
-        selected_items[0].output().to_string()
-    }
-
     pub fn run(&self) -> Result<Child, Box<dyn Error>> {
         let program_name = match self.package_manager {
             PackageManager::Npm => "npm",
@@ -62,11 +62,33 @@ impl Instance {
             .spawn()?;
         Ok(child)
     }
+
+    fn select_script(&self) -> String {
+        let options = SkimOptionsBuilder::default()
+            .height(Some("50%"))
+            .build()
+            .unwrap();
+
+        let (tx, rx): (SkimItemSender, SkimItemReceiver) = unbounded();
+        for (name, description) in &self.package.scripts {
+            let _ = tx.send(Arc::new(Script {
+                name: name.to_string(),
+                description: format!("{} – {}", name, description),
+            }));
+        }
+        drop(tx);
+
+        let selected_items = Skim::run_with(&options, Some(rx))
+            .map(|out| out.selected_items)
+            .unwrap_or_else(|| Vec::new());
+
+        selected_items[0].output().to_string()
+    }
 }
 
 pub struct Config {
-    pub contents: String,
-    pub package_manager: PackageManager,
+    contents: String,
+    package_manager: PackageManager,
 }
 
 impl Config {
