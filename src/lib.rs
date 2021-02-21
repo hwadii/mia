@@ -5,14 +5,15 @@ use std::error::Error;
 use std::fs;
 use std::process::{Child, Command};
 
-type Scripts = serde_json::Map<String, serde_json::Value>;
-
 #[derive(Serialize, Deserialize)]
 pub struct Package {
     pub name: String,
     pub version: String,
-    pub scripts: Scripts,
-    pub private: bool,
+    pub scripts: serde_json::Map<String, serde_json::Value>,
+    #[serde(alias = "dependencies", default)]
+    pub deps: serde_json::Map<String, serde_json::Value>,
+    #[serde(rename = "devDependencies", default)]
+    pub dev_deps: serde_json::Map<String, serde_json::Value>,
 }
 
 struct Script {
