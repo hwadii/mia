@@ -56,7 +56,7 @@ impl Instance {
             PackageManager::Npm => "npm",
             PackageManager::Yarn => "yarn",
         };
-        let script_name = self.select_script();
+        let script_name = self.select_script()?;
         let child = Command::new(program_name)
             .arg("run")
             .arg(script_name)
@@ -64,7 +64,7 @@ impl Instance {
         Ok(child)
     }
 
-    fn select_script(&self) -> String {
+    fn select_script(&self) -> Result<String, &str> {
         let options = SkimOptionsBuilder::default()
             .height(Some("50%"))
             .build()
@@ -80,10 +80,17 @@ impl Instance {
         drop(tx);
 
         let selected_items = Skim::run_with(&options, Some(rx))
-            .map(|out| out.selected_items)
-            .unwrap_or_else(|| Vec::new());
+            .map(|out| match out.final_key {
+                Key::Enter => Some(out.selected_items),
+                _ => None
+            })
+            .unwrap_or_else(|| Some(Vec::new()));
 
-        selected_items[0].output().to_string()
+        if let Some(items) = selected_items {
+            Ok(items[0].output().to_string())
+        } else {
+            Err("Escape hit")
+        }
     }
 }
 
