@@ -10,7 +10,7 @@ fn main() {
         eprintln!("There was a problem parsing the json: {}", err);
         process::exit(1);
     });
-    let mut process = instance.run("start").unwrap_or_else(|err| {
+    let mut process = instance.run().unwrap_or_else(|err| {
         eprintln!("There was a problem starting the process: {}", err);
         process::exit(1);
     });

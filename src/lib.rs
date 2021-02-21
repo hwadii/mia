@@ -3,12 +3,16 @@ use serde_json;
 use std::error::Error;
 use std::fs;
 use std::process::{Child, Command};
+use skim::prelude::*;
+use std::io::Cursor;
+
+type Scripts = serde_json::Map<String, serde_json::Value>;
 
 #[derive(Serialize, Deserialize)]
 pub struct Package {
     pub name: String,
     pub version: String,
-    pub scripts: serde_json::Map<String, serde_json::Value>,
+    pub scripts: Scripts,
     pub private: bool,
 }
 
@@ -32,19 +36,29 @@ impl Instance {
         })
     }
 
-    pub fn run(&self, script_name: &str) -> Result<Child, Box<dyn Error>> {
+    pub fn select_script(&self) -> String {
+        let options = SkimOptionsBuilder::default()
+            .height(Some("50%"))
+            .build()
+            .unwrap();
+        let input = self.package.scripts.keys().map(|s| &**s).collect::<Vec<&str>>().join("\n");
+        let item_reader = SkimItemReader::default();
+        let selected_items = Skim::run_with(&options, Some(item_reader.of_bufread(Cursor::new(input))))
+            .map(|out| out.selected_items)
+            .unwrap_or_else(|| Vec::new());
+
+        selected_items[0].output().to_string()
+    }
+
+    pub fn run(&self) -> Result<Child, Box<dyn Error>> {
         let program_name = match self.package_manager {
             PackageManager::Npm => "npm",
             PackageManager::Yarn => "yarn",
         };
-        let chosen_script = if self.package.scripts.contains_key(script_name) {
-            Ok(script_name)
-        } else {
-            Err("No script exists with the given name")
-        };
+        let script_name = self.select_script();
         let child = Command::new(program_name)
             .arg("run")
-            .arg(chosen_script.map_err(|err| err)?)
+            .arg(script_name)
             .spawn()?;
         Ok(child)
     }
